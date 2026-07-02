@@ -1,0 +1,28 @@
+FROM cvat/server:dev
+
+COPY --chown=django:django cvat/apps/dataset_manager/formats/semantic_png.py \
+    /home/django/cvat/apps/dataset_manager/formats/semantic_png.py
+COPY --chown=django:django cvat/apps/dataset_manager/formats/registry.py \
+    /home/django/cvat/apps/dataset_manager/formats/registry.py
+COPY --chown=django:django cvat/apps/dataset_manager/task.py \
+    /home/django/cvat/apps/dataset_manager/task.py
+COPY --chown=django:django cvat/apps/engine/models.py \
+    /home/django/cvat/apps/engine/models.py
+COPY --chown=django:django cvat/apps/engine/serializers.py \
+    /home/django/cvat/apps/engine/serializers.py
+COPY --chown=django:django cvat/apps/engine/views.py \
+    /home/django/cvat/apps/engine/views.py
+COPY --chown=django:django cvat/apps/lambda_manager/views.py \
+    /home/django/cvat/apps/lambda_manager/views.py
+COPY --chown=django:django cvat/apps/engine/migrations/0107_labeledshape_audit_fields.py \
+    /home/django/cvat/apps/engine/migrations/0107_labeledshape_audit_fields.py
+
+RUN python -m py_compile \
+    /home/django/cvat/apps/dataset_manager/formats/semantic_png.py \
+    /home/django/cvat/apps/dataset_manager/formats/registry.py \
+    /home/django/cvat/apps/dataset_manager/task.py \
+    /home/django/cvat/apps/engine/models.py \
+    /home/django/cvat/apps/engine/serializers.py \
+    /home/django/cvat/apps/engine/views.py \
+    /home/django/cvat/apps/lambda_manager/views.py \
+    /home/django/cvat/apps/engine/migrations/0107_labeledshape_audit_fields.py

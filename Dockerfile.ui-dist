@@ -1,0 +1,3 @@
+FROM cvat/ui:dev
+
+COPY cvat-ui/dist/ /usr/share/nginx/html/
