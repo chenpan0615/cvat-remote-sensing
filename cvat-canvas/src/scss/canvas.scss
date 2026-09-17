@@ -409,6 +409,27 @@ g.cvat_canvas_shape_occluded {
     box-shadow: 2px 2px 5px 0 rgba(0, 0, 0, 75%);
 }
 
+#cvat_canvas_comparison_viewport {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 1;
+    width: 50%;
+    overflow: hidden;
+    pointer-events: none;
+
+    &.cvat-canvas-comparison-swiping {
+        border-right: 2px solid white;
+        box-shadow: 1px 0 0 rgba(0, 0, 0, 65%);
+    }
+}
+
+#cvat_canvas_comparison {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
 #cvat_canvas_bitmap {
     @extend .cvat_canvas_pixelized;
 

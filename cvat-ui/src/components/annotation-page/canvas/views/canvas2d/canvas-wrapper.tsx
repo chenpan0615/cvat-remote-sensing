@@ -9,6 +9,8 @@ import React from 'react';
 import { connect } from 'react-redux';
 import Spin from 'antd/lib/spin';
 import Popover from 'antd/lib/popover';
+import Radio from 'antd/lib/radio';
+import Slider from 'antd/lib/slider';
 import Icon, { UpOutlined } from '@ant-design/icons';
 import notification from 'antd/lib/notification';
 import debounce from 'lodash/debounce';
@@ -83,6 +85,7 @@ interface StateToProps {
     annotations: ObjectState[];
     renderData: RenderData;
     frameData: any;
+    relatedFiles: number;
     frameAngle: number;
     canvasIsReady: boolean;
     frame: number;
@@ -221,6 +224,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
         canvasInstance,
         jobInstance,
         frameData,
+        relatedFiles: state.annotation.player.frame.relatedFiles,
         frameAngle: frameAngles[frame - jobInstance.startFrame],
         canvasIsReady,
         frame,
@@ -401,6 +405,117 @@ function mapDispatchToProps(dispatch: any): DispatchToProps {
 }
 
 type Props = StateToProps & DispatchToProps;
+
+type ChangeDetectionViewMode = 'a' | 'swipe' | 'b';
+type ChangeDetectionRole = 'a' | 'b' | '';
+
+interface MainCanvasComparisonProps {
+    canvasInstance: Canvas;
+    jobInstance: any;
+    frame: number;
+    relatedFiles: number;
+}
+
+function MainCanvasComparison(props: MainCanvasComparisonProps): JSX.Element | null {
+    const {
+        canvasInstance, jobInstance, frame, relatedFiles,
+    } = props;
+    const [comparisonImage, setComparisonImage] = React.useState<ImageBitmap | null>(null);
+    const [comparisonRole, setComparisonRole] = React.useState<ChangeDetectionRole>('');
+    const [viewMode, setViewMode] = React.useState<ChangeDetectionViewMode>('swipe');
+    const [swipePosition, setSwipePosition] = React.useState<number>(50);
+    const [fetching, setFetching] = React.useState<boolean>(false);
+
+    React.useEffect(() => {
+        let active = true;
+        setComparisonImage(null);
+        setComparisonRole('');
+
+        if (!relatedFiles) {
+            setFetching(false);
+            return () => {
+                active = false;
+            };
+        }
+
+        setFetching(true);
+        jobInstance.frames.contextImage(frame).then((images: Record<string, ImageBitmap>) => {
+            if (!active) return;
+
+            const names = Object.keys(images).sort();
+            const selectedName = names.find((name: string) => name.toLowerCase().startsWith('before')) ||
+                names.find((name: string) => name.toLowerCase().startsWith('after')) || names[0];
+            const selectedNameLower = (selectedName || '').toLowerCase();
+            if (selectedNameLower.startsWith('before')) {
+                setComparisonRole('a');
+            } else if (selectedNameLower.startsWith('after')) {
+                setComparisonRole('b');
+            }
+            setComparisonImage(selectedName ? images[selectedName] : null);
+        }).catch((error: any) => {
+            if (active) {
+                notification.error({
+                    message: `Could not load the A/B comparison image. Frame: ${frame}`,
+                    description: error.toString(),
+                });
+            }
+        }).finally(() => {
+            if (active) setFetching(false);
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [jobInstance, frame, relatedFiles]);
+
+    React.useEffect(() => {
+        canvasInstance.setComparisonImage(comparisonImage);
+        return () => canvasInstance.setComparisonImage(null);
+    }, [canvasInstance, comparisonImage]);
+
+    React.useEffect(() => {
+        let position = swipePosition;
+        if (viewMode !== 'swipe') {
+            position = viewMode === comparisonRole ? 100 : 0;
+        }
+        canvasInstance.setComparisonPosition(position);
+    }, [canvasInstance, comparisonRole, viewMode, swipePosition]);
+
+    if (!relatedFiles || (!comparisonImage && !fetching)) return null;
+
+    const primaryRole: ChangeDetectionRole = comparisonRole === 'a' ? 'b' : 'a';
+    const roleLabel = (role: ChangeDetectionRole): string => (
+        role === primaryRole ? `${role.toUpperCase()} · Edit` : role.toUpperCase()
+    );
+
+    return (
+        <div className='cvat-main-canvas-comparison-controls'>
+            { fetching && !comparisonImage ? <Spin size='small' /> : (
+                <>
+                    <Radio.Group
+                        size='small'
+                        buttonStyle='solid'
+                        value={viewMode}
+                        onChange={(event) => setViewMode(event.target.value)}
+                    >
+                        <Radio.Button value='a'>{roleLabel('a')}</Radio.Button>
+                        <Radio.Button value='swipe'>Swipe</Radio.Button>
+                        <Radio.Button value='b'>{roleLabel('b')}</Radio.Button>
+                    </Radio.Group>
+                    { viewMode === 'swipe' && (
+                        <Slider
+                            value={swipePosition}
+                            min={0}
+                            max={100}
+                            tooltip={{ formatter: null }}
+                            onChange={(value: number) => setSwipePosition(value)}
+                        />
+                    ) }
+                </>
+            ) }
+        </div>
+    );
+}
 
 class CanvasWrapperComponent extends React.PureComponent<Props> {
     private debouncedUpdate = debounce(this.updateCanvas.bind(this), 250, { leading: true });
@@ -1164,6 +1279,9 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             onOpenLayerStack,
             onActivateObject,
             onExpandObject,
+            jobInstance,
+            frame,
+            relatedFiles,
         } = this.props;
         const { canvasInstance } = this.props as { canvasInstance: Canvas };
 
@@ -1240,6 +1358,15 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
                         height: '100%',
                     }}
                 />
+
+                { relatedFiles > 0 && (
+                    <MainCanvasComparison
+                        canvasInstance={canvasInstance}
+                        jobInstance={jobInstance}
+                        frame={frame}
+                        relatedFiles={relatedFiles}
+                    />
+                ) }
 
                 <Popover
                     destroyTooltipOnHide

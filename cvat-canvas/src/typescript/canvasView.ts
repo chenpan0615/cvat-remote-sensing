@@ -46,6 +46,8 @@ import {
 
 export interface CanvasView {
     html(): HTMLDivElement;
+    setComparisonImage(image: ImageBitmap | null): void;
+    setComparisonPosition(position: number): void;
     setupConflictRegions(clientID: number): number[];
     translateFromSVG(points: number[]): number[];
 }
@@ -54,6 +56,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
     private text: SVGSVGElement;
     private adoptedText: SVG.Container;
     private background: HTMLCanvasElement;
+    private comparison: HTMLCanvasElement;
+    private comparisonViewport: HTMLDivElement;
     private masksContent: HTMLCanvasElement;
     private bitmap: HTMLCanvasElement;
     private bitmapUpdateReqId: number;
@@ -775,7 +779,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     };
 
     private moveCanvas(): void {
-        for (const obj of [this.background, this.grid, this.bitmap]) {
+        for (const obj of [this.background, this.comparison, this.grid, this.bitmap]) {
             obj.style.top = `${this.geometry.top}px`;
             obj.style.left = `${this.geometry.left}px`;
         }
@@ -801,6 +805,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         // Transform canvas
         for (const obj of [
             this.background,
+            this.comparison,
             this.grid,
             this.content,
             this.bitmap,
@@ -887,7 +892,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     }
 
     private resizeCanvas(): void {
-        for (const obj of [this.background, this.masksContent, this.grid, this.bitmap]) {
+        for (const obj of [this.background, this.comparison, this.masksContent, this.grid, this.bitmap]) {
             obj.style.width = `${this.geometry.image.width}px`;
             obj.style.height = `${this.geometry.image.height}px`;
         }
@@ -1722,6 +1727,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
         this.text = window.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         this.adoptedText = SVG.adopt((this.text as any) as HTMLElement) as SVG.Container;
         this.background = window.document.createElement('canvas');
+        this.comparison = window.document.createElement('canvas');
+        this.comparisonViewport = window.document.createElement('div');
         this.masksContent = window.document.createElement('canvas');
         this.bitmapUpdateReqId = 0;
         this.bitmap = window.document.createElement('canvas');
@@ -1782,6 +1789,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
         // Setup content
         this.text.setAttribute('id', 'cvat_canvas_text_content');
         this.background.setAttribute('id', 'cvat_canvas_background');
+        this.comparison.setAttribute('id', 'cvat_canvas_comparison');
+        this.comparisonViewport.setAttribute('id', 'cvat_canvas_comparison_viewport');
         this.masksContent.setAttribute('id', 'cvat_canvas_masks_content');
         this.content.setAttribute('id', 'cvat_canvas_content');
         this.bitmap.setAttribute('id', 'cvat_canvas_bitmap');
@@ -1800,8 +1809,11 @@ export class CanvasViewImpl implements CanvasView, Listener {
         gridDefs.appendChild(this.gridPattern);
         this.gridPattern.appendChild(this.gridPath);
 
+        this.comparisonViewport.appendChild(this.comparison);
+
         this.canvas.appendChild(this.text);
         this.canvas.appendChild(this.background);
+        this.canvas.appendChild(this.comparisonViewport);
         this.canvas.appendChild(this.masksContent);
         this.canvas.appendChild(this.bitmap);
         this.canvas.appendChild(this.grid);
@@ -2024,8 +2036,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
             if (configuration.smoothImage === true) {
                 this.background.classList.remove('cvat_canvas_pixelized');
+                this.comparison.classList.remove('cvat_canvas_pixelized');
             } else if (configuration.smoothImage === false) {
                 this.background.classList.add('cvat_canvas_pixelized');
+                this.comparison.classList.add('cvat_canvas_pixelized');
             }
 
             this.configuration = configuration;
@@ -2057,6 +2071,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
             if (typeof configuration.CSSImageFilter === 'string') {
                 this.background.style.filter = configuration.CSSImageFilter;
+                this.comparison.style.filter = configuration.CSSImageFilter;
             }
             this.activate(activeElement);
             this.editHandler.configure(this.configuration);
@@ -2404,6 +2419,33 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
     public html(): HTMLDivElement {
         return this.canvas;
+    }
+
+    public setComparisonImage(image: ImageBitmap | null): void {
+        const context = this.comparison.getContext('2d');
+        if (!image || !context) {
+            this.comparisonViewport.style.display = 'none';
+            context?.clearRect(0, 0, this.comparison.width, this.comparison.height);
+            return;
+        }
+
+        this.comparison.width = image.width;
+        this.comparison.height = image.height;
+        context.clearRect(0, 0, image.width, image.height);
+        context.drawImage(image, 0, 0);
+        this.comparisonViewport.style.display = '';
+        this.resizeCanvas();
+        this.moveCanvas();
+        this.transformCanvas();
+    }
+
+    public setComparisonPosition(position: number): void {
+        const normalizedPosition = clamp(position, 0, 100);
+        this.comparisonViewport.style.width = `${normalizedPosition}%`;
+        this.comparisonViewport.classList.toggle(
+            'cvat-canvas-comparison-swiping',
+            normalizedPosition > 0 && normalizedPosition < 100,
+        );
     }
 
     public setupConflictRegions(state: any): number[] {

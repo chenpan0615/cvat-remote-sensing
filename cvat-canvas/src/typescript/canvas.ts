@@ -21,6 +21,8 @@ import '../scss/canvas.scss';
 
 interface Canvas {
     html(): HTMLDivElement;
+    setComparisonImage(image: ImageBitmap | null): void;
+    setComparisonPosition(position: number): void;
     setup(frameData: any, objectStates: any[], renderData?: RenderData): void;
     setupIssueRegions(issueRegions: Record<number, { hidden: boolean; points: number[] }>): void;
     translateFromSVG(points: number[]): number[];
@@ -70,6 +72,14 @@ class CanvasImpl implements Canvas {
 
     public html(): HTMLDivElement {
         return this.view.html();
+    }
+
+    public setComparisonImage(image: ImageBitmap | null): void {
+        this.view.setComparisonImage(image);
+    }
+
+    public setComparisonPosition(position: number): void {
+        this.view.setComparisonPosition(position);
     }
 
     public setup(frameData: any, objectStates: any[], renderData?: RenderData): void {

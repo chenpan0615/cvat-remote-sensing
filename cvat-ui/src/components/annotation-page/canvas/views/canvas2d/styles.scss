@@ -61,3 +61,30 @@
         }
     }
 }
+
+.cvat-main-canvas-comparison-controls {
+    position: absolute;
+    top: $grid-unit-size * 3;
+    left: 50%;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: $grid-unit-size * 2;
+    min-height: $grid-unit-size * 8;
+    padding: $grid-unit-size $grid-unit-size * 2;
+    transform: translateX(-50%);
+    border: 1px solid $border-color-1;
+    border-radius: $border-radius-base;
+    background: rgba(255, 255, 255, 92%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 18%);
+
+    .ant-radio-group {
+        display: flex;
+        white-space: nowrap;
+    }
+
+    .ant-slider {
+        width: 180px;
+        margin: 0 $grid-unit-size;
+    }
+}
