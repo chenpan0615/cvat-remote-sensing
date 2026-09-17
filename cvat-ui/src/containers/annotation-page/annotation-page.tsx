@@ -9,7 +9,7 @@ import { RouteComponentProps } from 'react-router';
 
 import AnnotationPageComponent from 'components/annotation-page/annotation-page';
 import {
-    getJobAsync, saveLogsAsync, changeFrameAsync,
+    getJobAsync, hasUpdatedJobLabelsAsync, saveAndReloadJobAsync, saveLogsAsync, changeFrameAsync,
     closeJob as closeJobAction,
 } from 'actions/annotation-actions';
 
@@ -30,6 +30,8 @@ interface StateToProps {
 
 interface DispatchToProps {
     getJob(): void;
+    hasUpdatedJobLabels(): Promise<boolean>;
+    saveAndReloadJob(): Promise<void>;
     changeFrame(frame: number): void;
     saveLogs(): void;
     closeJob(): void;
@@ -113,6 +115,12 @@ function mapDispatchToProps(dispatch: any, own: OwnProps): DispatchToProps {
                     ...(initialWorkspace ? { initialWorkspace: initialWorkspace[1] } : { initialWorkspace: null }),
                 },
             }));
+        },
+        hasUpdatedJobLabels(): Promise<boolean> {
+            return dispatch(hasUpdatedJobLabelsAsync());
+        },
+        saveAndReloadJob(): Promise<void> {
+            return dispatch(saveAndReloadJobAsync());
         },
         saveLogs(): void {
             dispatch(saveLogsAsync());

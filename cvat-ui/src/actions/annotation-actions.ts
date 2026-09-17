@@ -1104,6 +1104,19 @@ export function getJobAsync({
     };
 }
 
+export function hasUpdatedJobLabelsAsync(): ThunkAction<Promise<boolean>> {
+    return async (): Promise<boolean> => {
+        const { jobInstance } = receiveAnnotationsParameters();
+        const [latestJob] = await cvat.jobs.get({ jobID: jobInstance.id });
+        const currentLabels = jobInstance.labels;
+        const latestLabels = latestJob.labels;
+
+        return currentLabels.length !== latestLabels.length || latestLabels.some((label, index): boolean => (
+            label.id !== currentLabels[index]?.id || !label.equals(currentLabels[index])
+        ));
+    };
+}
+
 export function saveAnnotationsAsync(): ThunkAction {
     return async (dispatch: ThunkDispatch): Promise<void> => {
         const { jobInstance } = receiveAnnotationsParameters();
@@ -1141,6 +1154,13 @@ export function saveAnnotationsAsync(): ThunkAction {
 
             throw error;
         }
+    };
+}
+
+export function saveAndReloadJobAsync(): ThunkAction {
+    return async (dispatch: ThunkDispatch): Promise<void> => {
+        await dispatch(saveAnnotationsAsync());
+        window.location.reload();
     };
 }
 

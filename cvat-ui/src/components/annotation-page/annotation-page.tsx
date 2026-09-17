@@ -3,7 +3,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-import React, { useEffect } from 'react';
+import React, {
+    useCallback, useEffect, useRef,
+} from 'react';
 import Layout from 'antd/lib/layout';
 import Spin from 'antd/lib/spin';
 import notification from 'antd/lib/notification';
@@ -36,6 +38,8 @@ interface Props {
     frameNumber: number;
     workspace: Workspace;
     getJob(): void;
+    hasUpdatedJobLabels(): Promise<boolean>;
+    saveAndReloadJob(): Promise<void>;
     saveLogs(): void;
     closeJob(): void;
     changeFrame(frame: number): void;
@@ -44,10 +48,58 @@ interface Props {
 export default function AnnotationPageComponent(props: Props): JSX.Element {
     const {
         job, fetching, annotationsInitialized, workspace, frameNumber,
-        getJob, closeJob, saveLogs, changeFrame,
+        getJob, hasUpdatedJobLabels, saveAndReloadJob, closeJob, saveLogs, changeFrame,
     } = props;
     const prevJob = usePrevious(job);
     const prevFetching = usePrevious(fetching);
+    const checkingLabels = useRef(false);
+    const labelsNotificationVisible = useRef(false);
+
+    const checkLabelSchema = useCallback(async (): Promise<void> => {
+        if (!job || checkingLabels.current || labelsNotificationVisible.current) {
+            return;
+        }
+
+        checkingLabels.current = true;
+        try {
+            if (await hasUpdatedJobLabels()) {
+                const notificationKey = `cvat-notification-label-schema-${job.id}`;
+                labelsNotificationVisible.current = true;
+                notification.warning({
+                    key: notificationKey,
+                    message: 'Label schema updated',
+                    description: (
+                        <span>
+                            The project label schema changed.
+                            <Button
+                                type='link'
+                                onClick={async (): Promise<void> => {
+                                    notification.destroy(notificationKey);
+                                    try {
+                                        await saveAndReloadJob();
+                                    } catch (_error) {
+                                        labelsNotificationVisible.current = false;
+                                    }
+                                }}
+                            >
+                                Save and sync
+                            </Button>
+                        </span>
+                    ),
+                    duration: 0,
+                    placement: 'topRight',
+                    className: 'cvat-notification-label-schema',
+                    onClose: () => {
+                        labelsNotificationVisible.current = false;
+                    },
+                });
+            }
+        } catch (_error) {
+            // The next focus or timer tick will retry without interrupting annotation.
+        } finally {
+            checkingLabels.current = false;
+        }
+    }, [job, hasUpdatedJobLabels, saveAndReloadJob]);
 
     useEffect(() => {
         saveLogs();
@@ -135,6 +187,23 @@ export default function AnnotationPageComponent(props: Props): JSX.Element {
             job.logger.log(EventScope.loadWorkspace, { obj_name: workspace });
         }
     }, [job, workspace]);
+
+    useEffect(() => {
+        if (!job) {
+            return undefined;
+        }
+
+        const onFocus = (): void => {
+            checkLabelSchema();
+        };
+        const interval = window.setInterval(checkLabelSchema, 60000);
+        window.addEventListener('focus', onFocus);
+
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener('focus', onFocus);
+        };
+    }, [job, checkLabelSchema]);
 
     if (job === null || !annotationsInitialized) {
         return <Spin size='large' className='cvat-spinner' />;

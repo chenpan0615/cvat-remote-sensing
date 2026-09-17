@@ -3526,6 +3526,7 @@ class ProjectWriteSerializer(serializers.ModelSerializer, OrgTransferableMixin):
         os.makedirs(project_path)
 
         LabelSerializer.create_labels(labels, parent_instance=db_project)
+        self.sync_change_detection_label_schema(db_project)
 
         if validated_data.get("assignee_id"):
             db_project.assignee_updated_date = db_project.updated_date
@@ -3551,6 +3552,63 @@ class ProjectWriteSerializer(serializers.ModelSerializer, OrgTransferableMixin):
                     instance.update_assignee(field_value)
                 update_fields.append(field_name)
 
+    @staticmethod
+    def sync_change_detection_label_schema(instance: models.Project) -> bool:
+        labels = list(instance.get_labels(prefetch=True).order_by("id"))
+        template = next((label for label in labels if label.name == "change_todo"), None)
+        if template is None:
+            return False
+
+        template_attributes = {
+            attribute.name: attribute for attribute in template.attributespec_set.all()
+        }
+        from_class = template_attributes.get("from_class")
+        if from_class is None or from_class.input_type != str(models.AttributeType.SELECT):
+            return False
+
+        semantic_classes = [label.name for label in labels if label.id != template.id]
+        canonical_from_values = list(
+            dict.fromkeys([*from_class.values.split("\n"), *semantic_classes])
+        )
+        changed = False
+
+        for label in labels:
+            label_attributes = {
+                attribute.name: attribute for attribute in label.attributespec_set.all()
+            }
+            for attribute_name, template_attribute in template_attributes.items():
+                label_attribute = label_attributes.get(attribute_name)
+                if label_attribute is None:
+                    values = template_attribute.values
+                    if attribute_name == "from_class":
+                        values = "\n".join(canonical_from_values)
+
+                    models.AttributeSpec.objects.create(
+                        label=label,
+                        name=template_attribute.name,
+                        mutable=template_attribute.mutable,
+                        input_type=template_attribute.input_type,
+                        default_value=template_attribute.default_value,
+                        values=values,
+                    )
+                    changed = True
+                elif (
+                    attribute_name == "from_class"
+                    and label_attribute.input_type == str(models.AttributeType.SELECT)
+                ):
+                    merged_values = list(
+                        dict.fromkeys(
+                            [*canonical_from_values, *label_attribute.values.split("\n")]
+                        )
+                    )
+                    values = "\n".join(merged_values)
+                    if label_attribute.values != values:
+                        label_attribute.values = values
+                        label_attribute.save(update_fields=["values"])
+                        changed = True
+
+        return changed
+
     # pylint: disable=no-self-use
     @transaction.atomic
     def update(self, instance: models.Project, validated_data: dict):
@@ -3570,6 +3628,7 @@ class ProjectWriteSerializer(serializers.ModelSerializer, OrgTransferableMixin):
 
             if labels := validated_data.get("label_set"):
                 LabelSerializer.update_labels(labels, parent_instance=instance)
+                self.sync_change_detection_label_schema(instance)
                 update_fields.append("updated_date")
 
             # update source and target storages

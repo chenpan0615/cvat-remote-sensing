@@ -1,0 +1,4 @@
+ARG CVAT_SERVER_BASE=cvat/server:semantic-png
+FROM ${CVAT_SERVER_BASE}
+
+COPY --chown=django:django cvat/apps/engine/serializers.py /home/django/cvat/apps/engine/serializers.py
